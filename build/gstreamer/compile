@@ -17,7 +17,7 @@ for repo in gstreamer libnice gst-plugins-base gst-plugins-good gst-plugins-bad 
   elif [[ $repo == "gst-plugins-good" ]]; then
     opts="$opts -D examples=disabled -D pulse=enabled -D qt5=disabled"
   elif [[ $repo == "gst-plugins-bad" ]]; then
-    opts="$opts -D gpl=enabled -D examples=disabled -D introspection=disabled"
+    opts="$opts -D gpl=enabled -D examples=disabled -D introspection=disabled -D nvcodec=enabled"
   elif [[ $repo == "gst-plugins-ugly" ]]; then
     opts="$opts -D gpl=enabled"
   fi

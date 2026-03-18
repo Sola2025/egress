@@ -17,7 +17,6 @@ package builder
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/go-gst/go-gst/gst"
 	"github.com/go-gst/go-gst/gst/app"
@@ -599,56 +598,30 @@ func (b *VideoBin) addEncoder() error {
 	}
 
 	switch b.conf.VideoOutCodec {
-	// we only encode h264, the rest are too slow
+	// H264 is encoded using NVIDIA NVENC GPU accelerated encoder
 	case types.MimeTypeH264:
-		x264Enc, err := gst.NewElement("x264enc")
+		nvh264Enc, err := gst.NewElement("nvh264enc")
 		if err != nil {
 			return errors.ErrGstPipelineError(err)
 		}
 
-		x264Enc.SetArg("speed-preset", "veryfast")
+		nvh264Enc.SetArg("preset", "default")
 
-		var options []string
-		disabledSceneCut := false
-		// Streaming outputs always set KeyFrameInterval, so this effectively disables scenecut for RTMP/SRT.
+		// Set GOP size (keyframe interval) for streaming and segment outputs
 		if b.conf.KeyFrameInterval != 0 {
-			keyframeInterval := uint(b.conf.KeyFrameInterval * float64(b.conf.Framerate))
-			if err = x264Enc.SetProperty("key-int-max", keyframeInterval); err != nil {
+			gopSize := int(b.conf.KeyFrameInterval * float64(b.conf.Framerate))
+			if err = nvh264Enc.SetProperty("gop-size", gopSize); err != nil {
 				return errors.ErrGstPipelineError(err)
 			}
-			options = append(options, "scenecut=0")
-			disabledSceneCut = true
 		}
 
-		bufCapacity := uint(2000) // 2s
-		if b.conf.GetSegmentConfig() != nil {
-			// avoid key frames other than at segments boundaries as splitmuxsink can become inconsistent otherwise
-			if !disabledSceneCut {
-				options = append(options, "scenecut=0")
-				disabledSceneCut = true
-			}
-			bufCapacity = uint(time.Duration(b.conf.GetSegmentConfig().SegmentDuration) * (time.Second / time.Millisecond))
-		}
-		if bufCapacity > 10000 {
-			// Max value allowed by gstreamer
-			bufCapacity = 10000
-		}
-		if err = x264Enc.SetProperty("vbv-buf-capacity", bufCapacity); err != nil {
+		if err = nvh264Enc.SetProperty("bitrate", uint(b.conf.VideoBitrate)); err != nil {
 			return errors.ErrGstPipelineError(err)
 		}
 
-		if err = x264Enc.SetProperty("bitrate", uint(b.conf.VideoBitrate)); err != nil {
-			return errors.ErrGstPipelineError(err)
-		}
-
+		// Use CBR rate control for RTMP streaming to ensure constant bitrate
 		if sc := b.conf.GetStreamConfig(); sc != nil && sc.OutputType == types.OutputTypeRTMP {
-			options = append(options, "nal-hrd=cbr")
-		}
-		if len(options) > 0 {
-			optionString := strings.Join(options, ":")
-			if err = x264Enc.SetProperty("option-string", optionString); err != nil {
-				return errors.ErrGstPipelineError(err)
-			}
+			nvh264Enc.SetArg("rc-mode", "cbr-hq")
 		}
 
 		caps, err := gst.NewElement("capsfilter")
@@ -656,13 +629,13 @@ func (b *VideoBin) addEncoder() error {
 			return errors.ErrGstPipelineError(err)
 		}
 		if err = caps.SetProperty("caps", gst.NewCapsFromString(fmt.Sprintf(
-			"video/x-h264,profile=%s,multiview-mode=mono,multiview-flags=(GstVideoMultiviewFlagsSet)0:ffffffff:/right-view-first/left-flipped/left-flopped/right-flipped/right-flopped/half-aspect/mixed-mono",
+			"video/x-h264,profile=%s,stream-format=byte-stream",
 			b.conf.VideoProfile,
 		))); err != nil {
 			return errors.ErrGstPipelineError(err)
 		}
 
-		if err = b.bin.AddElements(x264Enc, caps); err != nil {
+		if err = b.bin.AddElements(nvh264Enc, caps); err != nil {
 			return err
 		}
 		return nil

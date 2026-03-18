@@ -9,7 +9,7 @@ COPY compile /
 
 RUN /compile
 
-FROM ubuntu:24.04
+FROM nvidia/cuda:12.4.1-runtime-ubuntu24.04
 
 RUN apt-get update && \
     apt-get dist-upgrade -y && \
@@ -106,7 +106,6 @@ RUN apt-get update && \
         libwebrtc-audio-processing1 \
         libwildmidi2 \
         libwoff1 \
-        libx264-164 \
         libx265-199 \
         libxkbcommon0 \
         libxslt1.1 \

@@ -93,4 +93,7 @@ USER egress
 ENV PATH=${PATH}:/chrome
 ENV XDG_RUNTIME_DIR=/home/egress/.cache/xdgr
 ENV CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox
+# expose NVIDIA GPU for NVENC hardware encoding
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=video,compute,utility
 ENTRYPOINT ["/entrypoint.sh"]

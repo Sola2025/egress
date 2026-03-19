@@ -605,7 +605,10 @@ func (b *VideoBin) addEncoder() error {
 			return errors.ErrGstPipelineError(err)
 		}
 
-		nvh264Enc.SetArg("preset", "default")
+		// low-latency-hq: best quality for live streaming while minimising encoder latency
+		nvh264Enc.SetArg("preset", "low-latency-hq")
+		// CBR is required for stable RTMP/streaming; apply unconditionally
+		nvh264Enc.SetArg("rc-mode", "cbr")
 
 		// Set GOP size (keyframe interval) for streaming and segment outputs
 		if b.conf.KeyFrameInterval != 0 {
@@ -619,23 +622,30 @@ func (b *VideoBin) addEncoder() error {
 			return errors.ErrGstPipelineError(err)
 		}
 
-		// Use CBR rate control for RTMP streaming to ensure constant bitrate
-		if sc := b.conf.GetStreamConfig(); sc != nil && sc.OutputType == types.OutputTypeRTMP {
-			nvh264Enc.SetArg("rc-mode", "cbr-hq")
+		// h264parse with config-interval=1 injects SPS/PPS NAL units before every
+		// keyframe, which is required for RTMP AVC sequence header and segment outputs.
+		h264Parse, err := gst.NewElement("h264parse")
+		if err != nil {
+			return errors.ErrGstPipelineError(err)
+		}
+		if err = h264Parse.SetProperty("config-interval", int(1)); err != nil {
+			return errors.ErrGstPipelineError(err)
 		}
 
 		caps, err := gst.NewElement("capsfilter")
 		if err != nil {
 			return errors.ErrGstPipelineError(err)
 		}
+		// Use avc format (length-prefixed) required by flvmux/RTMP and most muxers.
+		// h264parse automatically converts Annex-B byte-stream → AVC.
 		if err = caps.SetProperty("caps", gst.NewCapsFromString(fmt.Sprintf(
-			"video/x-h264,profile=%s,stream-format=byte-stream",
+			"video/x-h264,profile=%s,stream-format=avc,alignment=au",
 			b.conf.VideoProfile,
 		))); err != nil {
 			return errors.ErrGstPipelineError(err)
 		}
 
-		if err = b.bin.AddElements(nvh264Enc, caps); err != nil {
+		if err = b.bin.AddElements(nvh264Enc, h264Parse, caps); err != nil {
 			return err
 		}
 		return nil

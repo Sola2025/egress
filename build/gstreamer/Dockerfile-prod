@@ -1,15 +1,16 @@
 ARG GSTREAMER_VERSION
+ARG CUSTOM_BASE_IMAGE=sola2025/gstreamer:${GSTREAMER_VERSION}-base-nvenc
 
-FROM livekit/gstreamer:${GSTREAMER_VERSION}-base-${TARGETARCH}
+FROM ${CUSTOM_BASE_IMAGE}
 
 ENV DEBUG=false
 ENV OPTIMIZATIONS=true
 
 COPY compile /
 
-RUN /compile
+RUN sed -i 's/\r//' /compile && bash /compile
 
-FROM nvidia/cuda:12.4.1-runtime-ubuntu24.04
+FROM nvidia/cuda:12.6.0-runtime-ubuntu24.04
 
 RUN apt-get update && \
     apt-get dist-upgrade -y && \

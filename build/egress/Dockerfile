@@ -55,7 +55,7 @@ ENV TINI_VERSION v0.19.0
 ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-${TARGETARCH} /tini
 RUN chmod +x /tini
 
-FROM livekit/gstreamer:1.24.12-prod
+FROM sola2025/gstreamer:1.24.12-prod-nvenc
 
 ARG TARGETPLATFORM
 
@@ -87,6 +87,7 @@ RUN mkdir -p home/egress/tmp home/egress/.cache/xdgr && \
 COPY --from=1 /workspace/egress /bin/
 COPY --from=1 /tini /tini
 COPY build/egress/entrypoint.sh /
+RUN sed -i 's/\r//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 # run
 USER egress

@@ -214,6 +214,11 @@ func NewAppWriter(
 	if track.Kind() == webrtc.RTPCodecTypeVideo {
 		w.pliThrottle = core.NewThrottle(time.Second)
 		w.sendPLI = func() { w.pliThrottle(func() { rp.WritePLI(track.SSRC()) }) }
+		// Ensure startup no delay in waiting for the first keyframe by sending a PLI shortly after the first packet is received
+		go func() {
+			time.Sleep(20 * time.Millisecond)
+			rp.WritePLI(track.SSRC())
+		}()
 	}
 
 	w.buffer = jitter.NewBuffer(
